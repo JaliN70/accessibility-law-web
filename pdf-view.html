@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#3D2B1F">
+  <title>PDF 原文</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #525659;
+      font-family: "DM Sans", system-ui, sans-serif;
+      touch-action: manipulation;
+    }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.55rem 0.6rem;
+      background: #3D2B1F;
+      color: #fff;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    .toolbar-back,
+    .toolbar-dl {
+      color: #ffb366;
+      text-decoration: none;
+      font-size: 0.85rem;
+      white-space: nowrap;
+    }
+    .toolbar-info {
+      flex: 1;
+      text-align: center;
+      font-size: 0.82rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+    .toolbar-btn {
+      background: rgba(255, 255, 255, 0.12);
+      border: 0;
+      color: #fff;
+      padding: 0.35rem 0.55rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.8rem;
+      white-space: nowrap;
+    }
+    .toolbar-btn:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+    .toolbar-btn--zoom {
+      min-width: 2rem;
+      font-size: 1rem;
+      line-height: 1;
+      padding: 0.3rem 0.45rem;
+    }
+    .toolbar-zoom-label {
+      font-size: 0.72rem;
+      min-width: 2.6rem;
+      text-align: center;
+      color: rgba(255, 255, 255, 0.85);
+    }
+    #wrap {
+      overflow: auto;
+      height: calc(100dvh - 44px);
+      padding: 0.75rem 0.5rem 1.5rem;
+      text-align: center;
+      -webkit-overflow-scrolling: touch;
+    }
+    #viewport {
+      display: inline-block;
+      vertical-align: top;
+    }
+    #viewport.is-preview {
+      transition: transform 0.05s linear;
+      transform-origin: top center;
+    }
+    canvas,
+    .page-img {
+      display: block;
+      margin: 0 auto;
+      box-shadow: 0 2px 16px rgba(0, 0, 0, 0.35);
+      background: #fff;
+    }
+    .status {
+      color: #ddd;
+      padding: 2rem 1rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <a class="toolbar-back" href="javascript:history.back()">← 返回</a>
+    <span class="toolbar-info" id="info">載入中…</span>
+    <button type="button" class="toolbar-btn toolbar-btn--zoom" id="zoomOut" aria-label="縮小">−</button>
+    <span class="toolbar-zoom-label" id="zoomLabel">100%</span>
+    <button type="button" class="toolbar-btn toolbar-btn--zoom" id="zoomIn" aria-label="放大">+</button>
+    <button type="button" class="toolbar-btn" id="zoomReset" aria-label="重設縮放">適寬</button>
+    <a class="toolbar-dl" id="download" href="#" hidden>PDF</a>
+    <button type="button" class="toolbar-btn" id="prev" disabled>上一頁</button>
+    <button type="button" class="toolbar-btn" id="next" disabled>下一頁</button>
+  </div>
+  <div id="wrap">
+    <div id="viewport"><p class="status" id="status">載入中…</p></div>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const params = new URLSearchParams(location.search);
+    let pageNum = Math.max(1, parseInt(params.get('page') || '1', 10));
+    const pdfFile = params.get('file') || 'assets/plumbing-spec.pdf';
+    const pageDir = params.get('pageDir') || 'assets/plumbing-spec/pages';
+    const totalPages = Math.max(1, parseInt(params.get('pages') || '117', 10));
+    const forcePng = params.get('mode') === 'png' || location.protocol === 'file:';
+
+    let viewerMode = forcePng ? 'png' : 'pdf';
+    let pdfDoc = null;
+    let zoomLevel = 1;
+    let fitScale = 1;
+    let renderJob = 0;
+    let renderTimer = null;
+    let pinchStartDist = 0;
+    let pinchStartZoom = 1;
+    let previewRatio = 1;
+    let lastTap = 0;
+    let isPinching = false;
+
+    const MIN_ZOOM = 0.5;
+    const MAX_ZOOM = 4;
+    const MAX_RENDER_SCALE = 6;
+
+    const wrap = document.getElementById('wrap');
+    const viewport = document.getElementById('viewport');
+    const info = document.getElementById('info');
+    const statusEl = document.getElementById('status');
+    const prevBtn = document.getElementById('prev');
+    const nextBtn = document.getElementById('next');
+    const zoomInBtn = document.getElementById('zoomIn');
+    const zoomOutBtn = document.getElementById('zoomOut');
+    const zoomResetBtn = document.getElementById('zoomReset');
+    const zoomLabel = document.getElementById('zoomLabel');
+    const downloadLink = document.getElementById('download');
+
+    downloadLink.href = pdfFile;
+    downloadLink.removeAttribute('hidden');
+
+    function clampZoom(value) {
+      return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
+    }
+
+    function updateZoomLabel() {
+      zoomLabel.textContent = `${Math.round(zoomLevel * 100)}%`;
+    }
+
+    function clearPreview() {
+      previewRatio = 1;
+      viewport.classList.remove('is-preview');
+      viewport.style.transform = '';
+    }
+
+    function setPreview(ratio) {
+      previewRatio = ratio;
+      viewport.classList.add('is-preview');
+      viewport.style.transform = `scale(${ratio})`;
+    }
+
+    function scheduleRender(delay) {
+      clearTimeout(renderTimer);
+      renderTimer = setTimeout(() => refreshView(), delay == null ? 80 : delay);
+    }
+
+    function setZoomLevel(level, delay) {
+      zoomLevel = clampZoom(level);
+      updateZoomLabel();
+      scheduleRender(delay);
+    }
+
+    function resetZoomFit() {
+      setZoomLevel(1, 0);
+    }
+
+    function stepZoom(delta) {
+      setZoomLevel(zoomLevel * (delta > 0 ? 1.25 : 0.8));
+    }
+
+    function touchDistance(touches) {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.hypot(dx, dy);
+    }
+
+    function bindZoomGestures() {
+      viewport.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+          isPinching = true;
+          pinchStartDist = touchDistance(e.touches);
+          pinchStartZoom = zoomLevel;
+        }
+      }, { passive: true });
+
+      viewport.addEventListener('touchmove', (e) => {
+        if (!isPinching || e.touches.length !== 2 || !pinchStartDist) return;
+        e.preventDefault();
+        const dist = touchDistance(e.touches);
+        const next = clampZoom(pinchStartZoom * (dist / pinchStartDist));
+        setPreview(next / zoomLevel);
+      }, { passive: false });
+
+      viewport.addEventListener('touchend', (e) => {
+        if (e.touches.length < 2 && isPinching) {
+          isPinching = false;
+          pinchStartDist = 0;
+          if (previewRatio !== 1) {
+            setZoomLevel(zoomLevel * previewRatio, 0);
+            clearPreview();
+          }
+        }
+        const now = Date.now();
+        if (e.changedTouches.length === 1 && now - lastTap < 300 && !isPinching) {
+          setZoomLevel(Math.abs(zoomLevel - 1) < 0.05 ? 2 : 1, 0);
+        }
+        lastTap = now;
+      });
+    }
+
+    function syncUrl() {
+      const q = new URLSearchParams({
+        file: pdfFile,
+        page: String(pageNum),
+        pages: String(totalPages),
+        pageDir,
+      });
+      if (viewerMode === 'png') q.set('mode', 'png');
+      history.replaceState(null, '', `?${q.toString()}`);
+    }
+
+    function updateNav() {
+      prevBtn.disabled = pageNum <= 1;
+      nextBtn.disabled = pageNum >= totalPages;
+      const modeNote = viewerMode === 'png' ? ' · 原頁截圖' : '';
+      info.textContent = `第 ${pageNum} / ${totalPages} 頁${modeNote}`;
+    }
+
+    function pageImageUrl(num) {
+      return `${pageDir}/page-${String(num).padStart(3, '0')}.png`;
+    }
+
+    function renderPng(num) {
+      pageNum = Math.min(Math.max(1, num), totalPages);
+      clearPreview();
+      viewport.innerHTML = '';
+      const img = document.createElement('img');
+      img.className = 'page-img';
+      img.alt = `PDF 第 ${pageNum} 頁`;
+      img.decoding = 'async';
+      img.onload = () => {
+        fitScale = (wrap.clientWidth - 16) / img.naturalWidth;
+        img.style.width = `${img.naturalWidth * fitScale * zoomLevel}px`;
+        img.style.height = 'auto';
+      };
+      img.onerror = () => {
+        viewport.innerHTML = '';
+        const err = document.createElement('p');
+        err.className = 'status';
+        err.textContent =
+          `找不到第 ${pageNum} 頁截圖。\n請確認 ${pageImageUrl(pageNum)} 存在，或以 HTTP 伺服器開啟網站。`;
+        viewport.appendChild(err);
+      };
+      img.src = pageImageUrl(pageNum);
+      viewport.appendChild(img);
+      document.title = `PDF 第 ${pageNum} 頁`;
+      syncUrl();
+      updateNav();
+      updateZoomLabel();
+    }
+
+    async function renderPdf(num) {
+      const job = ++renderJob;
+      pageNum = Math.min(Math.max(1, num), pdfDoc.numPages);
+      clearPreview();
+
+      const page = await pdfDoc.getPage(pageNum);
+      if (job !== renderJob) return;
+
+      const base = page.getViewport({ scale: 1 });
+      fitScale = (wrap.clientWidth - 16) / base.width;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+      const renderScale = Math.min(
+        fitScale * zoomLevel * dpr,
+        fitScale * MAX_ZOOM * dpr,
+        MAX_RENDER_SCALE
+      );
+      const vp = page.getViewport({ scale: renderScale });
+      const cssW = base.width * fitScale * zoomLevel;
+      const cssH = base.height * fitScale * zoomLevel;
+
+      let canvas = viewport.querySelector('canvas');
+      if (!canvas) {
+        viewport.innerHTML = '';
+        canvas = document.createElement('canvas');
+        viewport.appendChild(canvas);
+      }
+
+      canvas.width = vp.width;
+      canvas.height = vp.height;
+      canvas.style.width = `${cssW}px`;
+      canvas.style.height = `${cssH}px`;
+
+      await page.render({
+        canvasContext: canvas.getContext('2d'),
+        viewport: vp,
+      }).promise;
+
+      if (job !== renderJob) return;
+
+      document.title = `PDF 第 ${pageNum} 頁`;
+      syncUrl();
+      updateNav();
+      updateZoomLabel();
+    }
+
+    async function refreshView() {
+      if (viewerMode === 'pdf' && pdfDoc) {
+        await renderPdf(pageNum);
+        return;
+      }
+      renderPng(pageNum);
+    }
+
+    async function showPage(num) {
+      zoomLevel = 1;
+      updateZoomLabel();
+      if (viewerMode === 'png') {
+        renderPng(num);
+        return;
+      }
+      await renderPdf(num);
+    }
+
+    async function initPdf() {
+      const loadingTask = pdfjsLib.getDocument({
+        url: pdfFile,
+        withCredentials: false,
+      });
+      pdfDoc = await loadingTask.promise;
+      viewerMode = 'pdf';
+      if (pageNum > pdfDoc.numPages) pageNum = pdfDoc.numPages;
+      if (statusEl.parentNode) statusEl.remove();
+      await showPage(pageNum);
+    }
+
+    async function init() {
+      prevBtn.addEventListener('click', () => showPage(pageNum - 1));
+      nextBtn.addEventListener('click', () => showPage(pageNum + 1));
+      zoomInBtn.addEventListener('click', () => stepZoom(1));
+      zoomOutBtn.addEventListener('click', () => stepZoom(-1));
+      zoomResetBtn.addEventListener('click', resetZoomFit);
+      bindZoomGestures();
+
+      window.addEventListener('resize', () => {
+        if (viewerMode === 'pdf' && pdfDoc) scheduleRender(0);
+        else if (viewport.querySelector('.page-img')) scheduleRender(0);
+      });
+
+      if (forcePng) {
+        viewerMode = 'png';
+        if (statusEl.parentNode) statusEl.remove();
+        renderPng(pageNum);
+        return;
+      }
+
+      try {
+        await initPdf();
+      } catch (err) {
+        viewerMode = 'png';
+        if (statusEl.parentNode) statusEl.remove();
+        renderPng(pageNum);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
