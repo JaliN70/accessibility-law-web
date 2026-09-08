@@ -1,19 +1,19 @@
 /* HERMES-inspired retro palette */
 :root {
-  --hermes-orange: #E65A00;
-  --hermes-orange-light: #FF7A1A;
-  --hermes-orange-dark: #C44D00;
-  --brown-deep: #3D2B1F;
-  --brown-mid: #5C4033;
-  --brown-soft: #8B6914;
-  --cream: #FAF7F2;
-  --cream-dark: #F0EBE3;
-  --gold: #C4A962;
+  --hermes-orange: #059669;
+  --hermes-orange-light: #34D399;
+  --hermes-orange-dark: #047857;
+  --brown-deep: #2B4A3D;
+  --brown-mid: #3D6B5A;
+  --brown-soft: #5A8F7A;
+  --cream: #F0FDF4;
+  --cream-dark: #DCFCE7;
+  --gold: #C4A35A;
   --gold-light: #D4BC7A;
   --gold-muted: #A89050;
   --white: #FFFEF9;
-  --shadow: rgba(61, 43, 31, 0.12);
-  --shadow-deep: rgba(61, 43, 31, 0.22);
+  --shadow: rgba(43, 74, 61, 0.12);
+  --shadow-deep: rgba(43, 74, 61, 0.22);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
   --header-h: 4.5rem;
@@ -446,8 +446,8 @@ body {
   font-size: 0.85rem;
   font-weight: 700;
   color: var(--hermes-orange);
-  background: rgba(230, 90, 0, 0.07);
-  border: 1px solid rgba(230, 90, 0, 0.25);
+  background: rgba(5, 150, 105, 0.07);
+  border: 1px solid rgba(5, 150, 105, 0.25);
   border-radius: var(--radius);
   text-align: center;
   line-height: 1.2;
@@ -556,7 +556,7 @@ button.art-btn {
 
 .spec-media-link:active {
   border-color: var(--hermes-orange);
-  box-shadow: 0 6px 20px rgba(230, 90, 0, 0.1);
+  box-shadow: 0 6px 20px rgba(5, 150, 105, 0.1);
 }
 
 .spec-media-caption {
@@ -702,7 +702,7 @@ button.art-btn {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--hermes-orange);
-  border: 1px solid rgba(230, 90, 0, 0.35);
+  border: 1px solid rgba(5, 150, 105, 0.35);
   padding: 0.15rem 0.45rem;
   border-radius: var(--radius);
   margin-bottom: 0.45rem;
@@ -848,7 +848,7 @@ button.art-btn {
   border: 1.5px solid var(--hermes-orange-dark);
   border-radius: var(--radius);
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(230, 90, 0, 0.25);
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.25);
   transition: transform 0.15s, background 0.15s;
 }
 
@@ -864,7 +864,7 @@ button.art-btn {
 }
 
 .calc-submit--outline:active {
-  background: rgba(230, 90, 0, 0.08);
+  background: rgba(5, 150, 105, 0.08);
 }
 
 .calc-result {

@@ -4,4 +4,4 @@
 
 const LAW = ACCESSIBILITY_SPEC_LAW;
 
-const META = { updated: '2026/09/03', author: 'AJ' };
+const META = { updated: '2026/09/15', author: 'AJ' };
