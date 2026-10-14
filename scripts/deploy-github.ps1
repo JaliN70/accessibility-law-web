@@ -12,7 +12,7 @@ if ($LASTEXITCODE -ne 0) {
 
 $repo = "accessibility-law-web"
 $user = (gh api user -q .login)
-$exists = gh repo view "$user/$repo" 2>$null
+gh repo view "$user/$repo" 2>$null | Out-Null
 if ($LASTEXITCODE -ne 0) {
     gh repo create $repo --public --source=. --remote=origin --push --description "建築物無障礙設施設計規範 - 手機網頁版"
 } else {
