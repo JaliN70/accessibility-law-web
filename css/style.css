@@ -182,10 +182,32 @@ body {
 }
 
 .header-search {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
   padding: 0 1rem 0.55rem;
   max-width: 32rem;
   margin: 0 auto;
 }
+
+.header-search .search-wrap { flex: 1; min-width: 0; }
+
+.home-link {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.7rem;
+  color: var(--text-on-dark-light);
+  border: 1px solid var(--gold-muted);
+  border-radius: var(--radius);
+  font-size: 0.8125rem;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.home-link:active { background: rgba(196, 169, 98, 0.15); }
 
 .search-wrap {
   display: flex;
